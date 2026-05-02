@@ -1,137 +1,93 @@
 import requests
-import time
 
 
 class DataEngine:
 
     def __init__(self):
 
-        self.cache = {}
+        self.symbols = [
+            "BTCUSDT",
+            "ETHUSDT"
+        ]
 
-    # =========================
-    # BYBIT (FAST PRIMARY)
-    # =========================
-
-    def bybit(self, symbol):
+    def fetch_binance(self, symbol):
 
         try:
 
-            r = requests.get(
-
-                "https://api.bybit.com/v5/market/tickers",
-
-                params={
-                    "category": "spot",
-                    "symbol": symbol
-                },
-
-                timeout=5
+            url = (
+                f"https://api.binance.com/api/v3/ticker/price"
+                f"?symbol={symbol}"
             )
+
+            response = requests.get(
+                url,
+                timeout=15
+            )
+
+            data = response.json()
+
+            return float(data["price"])
+
+        except Exception as e:
+
+            print(f"{symbol} Binance feed failed -> {e}")
+
+            return None
+
+    def fetch_bybit(self, symbol):
+
+        try:
+
+            url = (
+                f"https://api.bybit.com/v5/market/tickers"
+                f"?category=linear&symbol={symbol}"
+            )
+
+            response = requests.get(
+                url,
+                timeout=15
+            )
+
+            data = response.json()
 
             return float(
-
-                r.json()["result"]
-
-                ["list"][0]
-
-                ["lastPrice"]
-
+                data["result"]["list"][0]["lastPrice"]
             )
 
-        except:
+        except Exception as e:
+
+            print(f"{symbol} Bybit feed failed -> {e}")
 
             return None
-
-    # =========================
-    # OKX (BACKUP)
-    # =========================
-
-    def okx(self, symbol):
-
-        try:
-
-            pair = symbol.replace(
-                "USDT",
-                "-USDT"
-            )
-
-            r = requests.get(
-
-                "https://www.okx.com/api/v5/market/ticker",
-
-                params={
-                    "instId": pair
-                },
-
-                timeout=5
-            )
-
-            return float(
-
-                r.json()["data"][0]["last"]
-
-            )
-
-        except:
-
-            return None
-
-    # =========================
-    # KRAKEN (3RD BACKUP)
-    # =========================
-
-    def kraken(self, symbol):
-
-        try:
-
-            pair_map = {
-                "BTCUSDT": "XBTUSD",
-                "ETHUSDT": "ETHUSD"
-            }
-
-            r = requests.get(
-
-                f"https://api.kraken.com/0/public/Ticker?pair={pair_map[symbol]}",
-
-                timeout=5
-            )
-
-            data = r.json()["result"]
-
-            key = list(data.keys())[0]
-
-            return float(data[key]["c"][0])
-
-        except:
-
-            return None
-
-    # =========================
-    # SMART PRICE (MEDIAN)
-    # =========================
 
     def get_price(self, symbol):
 
-        prices = [
+        # try Binance first
 
-            self.bybit(symbol),
+        price = self.fetch_binance(symbol)
 
-            self.okx(symbol),
+        if price is not None:
 
-            self.kraken(symbol)
+            return price
 
-        ]
+        # fallback to Bybit
 
-        valid = [p for p in prices if p is not None]
+        price = self.fetch_bybit(symbol)
 
-        if len(valid) == 0:
+        if price is not None:
 
-            print(
-                "ALL FEEDS FAILED"
-            )
+            return price
 
-            return None
+        print(f"ALL FEEDS FAILED FOR {symbol}")
 
-        valid.sort()
+        return None
 
-        return valid[len(valid)//2]
+    def get_market_snapshot(self):
+
+        snapshot = {}
+
+        for symbol in self.symbols:
+
+            snapshot[symbol] = self.get_price(symbol)
+
+        return snapshot
